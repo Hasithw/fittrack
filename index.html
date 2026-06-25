@@ -158,8 +158,8 @@ tr:hover .row-actions{opacity:1}
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
-<div id="auth-screen" class="auth-wrap" style="display:none">
+<!-- AUTH SCREEN - shown by default until session confirmed -->
+<div id="auth-screen" class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">
       <i class="ti ti-heartbeat auth-logo-icon"></i>
@@ -242,7 +242,11 @@ const sb = createClient(SUPA_URL, SUPA_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    flowType: 'pkce'
+  },
+  global: {
+    headers: { 'apikey': SUPA_KEY }
   }
 });
 
@@ -356,28 +360,25 @@ async function showApp(user){
   render();
 }
 
-// Listen for auth state changes
+// Single auth entry point - onAuthStateChange handles everything
 sb.auth.onAuthStateChange(async (event, session) => {
-  if(event === 'PASSWORD_RECOVERY') return; // handled separately
-  if(session?.user){ await showApp(session.user); }
-  else { showAuth(); }
+  if(event === 'PASSWORD_RECOVERY') return;
+  if(session?.user){
+    if(!currentUser || currentUser.id !== session.user.id){
+      await showApp(session.user);
+    }
+  } else {
+    showAuth();
+  }
 });
 
-// Initial check with timeout fallback
-(async()=>{
-  try {
-    const timeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('timeout')), 8000));
-    const sessionCheck = sb.auth.getSession();
-    const {data:{session}} = await Promise.race([sessionCheck, timeout]);
-    if(session?.user){ await showApp(session.user); }
-    else { showAuth(); }
-  } catch(e) {
-    // Connection failed or timed out — show login screen
+// Trigger initial session check
+sb.auth.getSession().then(({data:{session}, error}) => {
+  if(error || !session?.user){
     showAuth();
-    document.getElementById('auth-error').textContent = 'Connection issue — please sign in again.';
-    document.getElementById('auth-error').classList.add('show');
   }
-})();
+  // If session exists, onAuthStateChange above will handle it
+});
 
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 async function loadAllData(){
