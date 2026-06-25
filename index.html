@@ -381,17 +381,16 @@ async function loadAllData(){
   loading();
   const results = await Promise.all([
     sb.from('master_data').select('data').eq('user_id',currentUser.id).maybeSingle(),
-    sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
-    sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
-    sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
-    sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false})
+    sb.from('exercise_logs').select('*').order('date',{ascending:false}),
+    sb.from('sugar_logs').select('*').order('date',{ascending:false}),
+    sb.from('weight_logs').select('*').order('date',{ascending:false}),
+    sb.from('medical_logs').select('*').order('date',{ascending:false})
   ]);
   const [m, ex, su, we, med] = results;
   console.log('User ID:', currentUser.id);
-  console.log('Master:', m); console.log('Exercises:', ex);
-  console.log('Sugar:', su); console.log('Weight:', we); console.log('Medical:', med);
+  console.log('Master:', JSON.stringify(m));
+  console.log('Exercises:', JSON.stringify(ex));
   window._debug = {uid: currentUser.id, ex_err: ex?.error?.message, ex_count: ex?.data?.length, m_err: m?.error?.message};
-  // Always ensure cache.master is never null
   cache.master = (m?.data?.data) ? m.data.data : JSON.parse(JSON.stringify(defaultMaster));
   if(!cache.master.exerciseTypes) cache.master.exerciseTypes = defaultMaster.exerciseTypes;
   if(!cache.master.exercises) cache.master.exercises = defaultMaster.exercises;
