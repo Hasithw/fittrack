@@ -379,16 +379,20 @@ sb.auth.getSession().then(({data:{session}, error}) => {
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 async function loadAllData(){
   loading();
-  const fetchWithFallback = async (fn, fallback) => {
-    try { return await fn(); } catch(e) { return fallback; }
-  };
-  const [m, ex, su, we, med] = await Promise.all([
-    fetchWithFallback(()=>sb.from('master_data').select('data').eq('user_id',currentUser.id).single(), null),
-    fetchWithFallback(()=>sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
-    fetchWithFallback(()=>sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
-    fetchWithFallback(()=>sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
-    fetchWithFallback(()=>sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]})
+  const results = await Promise.all([
+    sb.from('master_data').select('data').eq('user_id',currentUser.id).single(),
+    sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false})
   ]);
+  const [m, ex, su, we, med] = results;
+  // Debug - show what came back
+  console.log('User ID:', currentUser.id);
+  console.log('Master:', m); console.log('Exercises:', ex);
+  console.log('Sugar:', su); console.log('Weight:', we); console.log('Medical:', med);
+  // Store debug info for display
+  window._debug = {uid: currentUser.id, ex_err: ex.error?.message, ex_count: ex.data?.length, m_err: m.error?.message};
   cache.master = m?.data?.data || JSON.parse(JSON.stringify(defaultMaster));
   cache.exerciseLogs = (ex?.data||[]).map(r=>({id:r.id,date:r.date,exercise:r.exercise,unit:r.unit,quantity:r.quantity}));
   cache.sugarLogs = (su?.data||[]).map(r=>({id:r.id,date:r.date,morningTea:r.morning_tea,eveningTea:r.evening_tea,extraSugar:r.extra_sugar,remarks:r.remarks||''}));
@@ -485,6 +489,10 @@ function renderDashboard(){
   document.getElementById('main').innerHTML=`
     <div class="page-title">Dashboard</div>
     <div class="page-sub">Your fitness at a glance</div>
+    <div style="background:#E6F1FB;border:0.5px solid #0C447C33;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;font-family:monospace">
+      <strong>Debug:</strong> User ID: ${currentUser.id} | Exercises: ${cache.exerciseLogs.length} | Sugar: ${cache.sugarLogs.length} | Weight: ${cache.weightLogs.length} | Medical: ${cache.medicalLogs.length}
+      ${window._debug?.ex_err ? ` | Error: ${window._debug.ex_err}` : ''}
+    </div>
     <div class="dash-section-title"><i class="ti ti-barbell"></i>Exercise Trends</div>
     ${!exNames.length?`<div class="card"><div class="dash-empty"><i class="ti ti-barbell"></i>No exercise data yet</div></div>`:`<div class="dash-grid-2">${exCards}</div>`}
     <div class="dash-section-title"><i class="ti ti-scale"></i>Weight</div>
