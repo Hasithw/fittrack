@@ -380,20 +380,23 @@ sb.auth.getSession().then(({data:{session}, error}) => {
 async function loadAllData(){
   loading();
   const results = await Promise.all([
-    sb.from('master_data').select('data').eq('user_id',currentUser.id).single(),
+    sb.from('master_data').select('data').eq('user_id',currentUser.id).maybeSingle(),
     sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
     sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
     sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
     sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false})
   ]);
   const [m, ex, su, we, med] = results;
-  // Debug - show what came back
   console.log('User ID:', currentUser.id);
   console.log('Master:', m); console.log('Exercises:', ex);
   console.log('Sugar:', su); console.log('Weight:', we); console.log('Medical:', med);
-  // Store debug info for display
-  window._debug = {uid: currentUser.id, ex_err: ex.error?.message, ex_count: ex.data?.length, m_err: m.error?.message};
-  cache.master = m?.data?.data || JSON.parse(JSON.stringify(defaultMaster));
+  window._debug = {uid: currentUser.id, ex_err: ex?.error?.message, ex_count: ex?.data?.length, m_err: m?.error?.message};
+  // Always ensure cache.master is never null
+  cache.master = (m?.data?.data) ? m.data.data : JSON.parse(JSON.stringify(defaultMaster));
+  if(!cache.master.exerciseTypes) cache.master.exerciseTypes = defaultMaster.exerciseTypes;
+  if(!cache.master.exercises) cache.master.exercises = defaultMaster.exercises;
+  if(!cache.master.units) cache.master.units = defaultMaster.units;
+  if(!cache.master.medicalTests) cache.master.medicalTests = defaultMaster.medicalTests;
   cache.exerciseLogs = (ex?.data||[]).map(r=>({id:r.id,date:r.date,exercise:r.exercise,unit:r.unit,quantity:r.quantity}));
   cache.sugarLogs = (su?.data||[]).map(r=>({id:r.id,date:r.date,morningTea:r.morning_tea,eveningTea:r.evening_tea,extraSugar:r.extra_sugar,remarks:r.remarks||''}));
   cache.weightLogs = (we?.data||[]).map(r=>({id:r.id,date:r.date,weight:r.weight}));
