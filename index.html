@@ -381,16 +381,12 @@ async function loadAllData(){
   loading();
   const results = await Promise.all([
     sb.from('master_data').select('data').eq('user_id',currentUser.id).maybeSingle(),
-    sb.from('exercise_logs').select('*').order('date',{ascending:false}),
-    sb.from('sugar_logs').select('*').order('date',{ascending:false}),
-    sb.from('weight_logs').select('*').order('date',{ascending:false}),
-    sb.from('medical_logs').select('*').order('date',{ascending:false})
+    sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false})
   ]);
   const [m, ex, su, we, med] = results;
-  console.log('User ID:', currentUser.id);
-  console.log('Master:', JSON.stringify(m));
-  console.log('Exercises:', JSON.stringify(ex));
-  window._debug = {uid: currentUser.id, ex_err: ex?.error?.message, ex_count: ex?.data?.length, m_err: m?.error?.message};
   cache.master = (m?.data?.data) ? m.data.data : JSON.parse(JSON.stringify(defaultMaster));
   if(!cache.master.exerciseTypes) cache.master.exerciseTypes = defaultMaster.exerciseTypes;
   if(!cache.master.exercises) cache.master.exercises = defaultMaster.exercises;
@@ -491,10 +487,6 @@ function renderDashboard(){
   document.getElementById('main').innerHTML=`
     <div class="page-title">Dashboard</div>
     <div class="page-sub">Your fitness at a glance</div>
-    <div style="background:#E6F1FB;border:0.5px solid #0C447C33;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px;font-family:monospace">
-      <strong>Debug:</strong> User ID: ${currentUser.id} | Exercises: ${cache.exerciseLogs.length} | Sugar: ${cache.sugarLogs.length} | Weight: ${cache.weightLogs.length} | Medical: ${cache.medicalLogs.length}
-      ${window._debug?.ex_err ? ` | Error: ${window._debug.ex_err}` : ''}
-    </div>
     <div class="dash-section-title"><i class="ti ti-barbell"></i>Exercise Trends</div>
     ${!exNames.length?`<div class="card"><div class="dash-empty"><i class="ti ti-barbell"></i>No exercise data yet</div></div>`:`<div class="dash-grid-2">${exCards}</div>`}
     <div class="dash-section-title"><i class="ti ti-scale"></i>Weight</div>
