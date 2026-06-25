@@ -169,6 +169,7 @@ tr:hover .row-actions{opacity:1}
     <div class="auth-tabs">
       <div class="auth-tab active" onclick="switchAuthTab('login')">Sign In</div>
       <div class="auth-tab" onclick="switchAuthTab('signup')">Create Account</div>
+      <div class="auth-tab" onclick="switchAuthTab('forgot')">Forgot Password</div>
     </div>
     <div class="auth-error" id="auth-error"></div>
     <div class="auth-success" id="auth-success"></div>
@@ -182,6 +183,12 @@ tr:hover .row-actions{opacity:1}
       <div class="auth-field"><label>Email</label><input type="email" id="signup-email" placeholder="you@example.com"></div>
       <div class="auth-field"><label>Password <span style="color:var(--text-tertiary)">(min 6 characters)</span></label><input type="password" id="signup-password" placeholder="Choose a password" onkeydown="if(event.key==='Enter')doSignup()"></div>
       <button class="auth-btn" id="signup-btn" onclick="doSignup()">Create Account</button>
+    </div>
+    <div id="forgot-form" style="display:none">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:1rem">Enter your email address and we'll send you a link to reset your password.</p>
+      <div class="auth-field"><label>Email</label><input type="email" id="forgot-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doForgot()"></div>
+      <button class="auth-btn" id="forgot-btn" onclick="doForgot()">Send Reset Link</button>
+      <p style="font-size:12px;color:var(--text-tertiary);margin-top:0.75rem;text-align:center">Check your inbox — the link will let you set a new password.</p>
     </div>
   </div>
 </div>
@@ -264,9 +271,11 @@ function loading(){ document.getElementById('main').innerHTML=`<div class="loadi
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 function switchAuthTab(tab){
-  document.querySelectorAll('.auth-tab').forEach((el,i)=>el.classList.toggle('active',i===(tab==='login'?0:1)));
-  document.getElementById('login-form').style.display = tab==='login'?'':'none';
-  document.getElementById('signup-form').style.display = tab==='signup'?'':'none';
+  document.querySelectorAll('.auth-tab').forEach((el,i)=>el.classList.toggle('active',
+    (tab==='login'&&i===0)||(tab==='signup'&&i===1)||(tab==='forgot'&&i===2)));
+  document.getElementById('login-form').style.display  = tab==='login'  ?'':'none';
+  document.getElementById('signup-form').style.display = tab==='signup' ?'':'none';
+  document.getElementById('forgot-form').style.display = tab==='forgot' ?'':'none';
   clearAuthMessages();
 }
 
@@ -300,6 +309,19 @@ async function doSignup(){
   btn.disabled=false; btn.textContent='Create Account';
   if(error){ showAuthError(error.message); return; }
   showAuthSuccess('Account created! You are now signed in.');
+}
+
+async function doForgot(){
+  const email=v('forgot-email');
+  if(!email){showAuthError('Please enter your email address');return;}
+  const btn=document.getElementById('forgot-btn');
+  btn.disabled=true; btn.textContent='Sending…';
+  const {error}=await sb.auth.resetPasswordForEmail(email,{
+    redirectTo: window.location.href
+  });
+  btn.disabled=false; btn.textContent='Send Reset Link';
+  if(error){showAuthError(error.message);return;}
+  showAuthSuccess('Reset link sent! Check your email inbox.');
 }
 
 async function doSignout(){
@@ -431,7 +453,6 @@ function renderDashboard(){
     :`<div class="card"><div class="card-title"><i class="ti ti-scale"></i>Weight Trend</div><div class="dash-empty"><i class="ti ti-scale"></i>Log at least 2 weight entries to see the trend</div></div>`;
 
   const sugarSorted=[...cache.sugarLogs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);
-  const todaySugar=cache.sugarLogs.find(l=>l.date===today());
   const sugarRows=sugarSorted.map(l=>`<tr>
     <td style="color:var(--text-secondary);white-space:nowrap;padding:8px 0.75rem">${fmtDate(l.date)}</td>
     <td style="padding:8px 0.75rem">${sugarPill(l)}</td>
@@ -439,17 +460,6 @@ function renderDashboard(){
     <td style="text-align:center;padding:8px 0.75rem">${tickIcon(l.eveningTea)}</td>
     <td style="text-align:center;padding:8px 0.75rem">${tickIcon(l.extraSugar)}</td>
   </tr>`).join('');
-  const sugarQuickLog=todaySugar?'':`
-    <div style="border-top:0.5px solid var(--border-light);margin-top:0.75rem;padding-top:0.75rem">
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:0.6rem;font-weight:500">No entry for today — log now</div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <input type="date" id="ds-date" value="${today()}" style="width:160px;padding:6px 10px;font-size:13px;border:0.5px solid var(--border-mid);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-family:inherit">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="ds-morning"> Morning Tea SF</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="ds-evening"> Evening Tea SF</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="ds-extra"> No Extra Sugar</label>
-        <button class="btn btn-primary btn-sm" onclick="dashAddSugar()"><i class="ti ti-check"></i>Save</button>
-      </div>
-    </div>`;
   const sugarCard=`<div class="card">
     <div class="card-title" style="margin-bottom:${sugarRows?'0.75rem':'0'}"><i class="ti ti-cup"></i>Sugar Intake <span style="font-size:11px;color:var(--text-tertiary);font-weight:400;margin-left:4px">last 7 days</span></div>
     ${sugarRows?`<table style="width:100%;border-collapse:collapse;font-size:13.5px"><thead><tr>
@@ -459,7 +469,6 @@ function renderDashboard(){
       <th style="text-align:center;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;padding:0 0.75rem 0.5rem;border-bottom:0.5px solid var(--border-light)">Evening Tea SF</th>
       <th style="text-align:center;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;padding:0 0.75rem 0.5rem;border-bottom:0.5px solid var(--border-light)">No Extra Sugar</th>
     </tr></thead><tbody>${sugarRows}</tbody></table>`:`<div class="dash-empty"><i class="ti ti-cup"></i>No sugar entries yet</div>`}
-    ${sugarQuickLog}
   </div>`;
 
   const medTests=[...new Set(cache.medicalLogs.map(l=>l.test))].filter(t=>t.toLowerCase()!=='bmi').sort();
@@ -515,16 +524,6 @@ function renderDashboard(){
       chartInstances.push(new Chart(canvas,{type:'line',data:{labels:logs.map(l=>fmtDate(l.date)),datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{filter:item=>item.datasetIndex===0,callbacks:{label:ctx=>` ${ctx.parsed.y} ${logs[0].unit||''}`}}},scales:{x:{ticks:{color:textC,font:{size:10},maxRotation:45},grid:{color:borderC}},y:{ticks:{color:textC,font:{size:10}},grid:{color:borderC}}}}}));
     });
   });
-}
-
-async function dashAddSugar(){
-  const date=document.getElementById('ds-date')?.value;
-  if(!date){showToast('Select a date',true);return;}
-  if(cache.sugarLogs.find(l=>l.date===date)){showToast('Entry already exists for that date',true);return;}
-  const {data,error}=await sb.from('sugar_logs').insert({user_id:currentUser.id,date,morning_tea:document.getElementById('ds-morning')?.checked||false,evening_tea:document.getElementById('ds-evening')?.checked||false,extra_sugar:document.getElementById('ds-extra')?.checked||false,remarks:''}).select().single();
-  if(error){showToast('Error saving',true);return;}
-  cache.sugarLogs.push({id:data.id,date,morningTea:data.morning_tea,eveningTea:data.evening_tea,extraSugar:data.extra_sugar,remarks:''});
-  showToast('Sugar intake saved'); renderDashboard();
 }
 
 // ── MASTER DATA ───────────────────────────────────────────────────────────────
