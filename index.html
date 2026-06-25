@@ -235,18 +235,14 @@ tr:hover .row-actions{opacity:1}
 <script>
 // ── SUPABASE ──────────────────────────────────────────────────────────────────
 const SUPA_URL = 'https://yqscgbwlkfjumzuhkzbw.supabase.co';
-const SUPA_KEY = 'sb_publishable_1NcWcVGoVxzSdWjnbrb2-A_dSYC6JQ7';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxc2NnYndsa2ZqdW16dWhremJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMzg3NzQsImV4cCI6MjA5NzkxNDc3NH0.SNk3fXB18gcs5ySFA7CERAdq84VDp2ylHglGzm8Y0Hg';
 const SITE_URL = 'https://hasithw.github.io/fittrack/';
 const { createClient } = supabase;
 const sb = createClient(SUPA_URL, SUPA_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
-  },
-  global: {
-    headers: { 'apikey': SUPA_KEY }
+    detectSessionInUrl: true
   }
 });
 
@@ -383,42 +379,29 @@ sb.auth.getSession().then(({data:{session}, error}) => {
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 async function loadAllData(){
   loading();
-  await Promise.all([loadMaster(), loadExerciseLogs(), loadSugarLogs(), loadWeightLogs(), loadMedicalLogs()]);
-}
-
-async function loadMaster(){
-  const {data,error} = await sb.from('master_data').select('data').eq('user_id',currentUser.id).single();
-  if(data) cache.master = data.data;
-  else cache.master = JSON.parse(JSON.stringify(defaultMaster));
+  const fetchWithFallback = async (fn, fallback) => {
+    try { return await fn(); } catch(e) { return fallback; }
+  };
+  const [m, ex, su, we, med] = await Promise.all([
+    fetchWithFallback(()=>sb.from('master_data').select('data').eq('user_id',currentUser.id).single(), null),
+    fetchWithFallback(()=>sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
+    fetchWithFallback(()=>sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
+    fetchWithFallback(()=>sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]}),
+    fetchWithFallback(()=>sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}), {data:[]})
+  ]);
+  cache.master = m?.data?.data || JSON.parse(JSON.stringify(defaultMaster));
+  cache.exerciseLogs = (ex?.data||[]).map(r=>({id:r.id,date:r.date,exercise:r.exercise,unit:r.unit,quantity:r.quantity}));
+  cache.sugarLogs = (su?.data||[]).map(r=>({id:r.id,date:r.date,morningTea:r.morning_tea,eveningTea:r.evening_tea,extraSugar:r.extra_sugar,remarks:r.remarks||''}));
+  cache.weightLogs = (we?.data||[]).map(r=>({id:r.id,date:r.date,weight:r.weight}));
+  cache.medicalLogs = (med?.data||[]).map(r=>({id:r.id,date:r.date,test:r.test,result:r.result,unit:r.unit||'',refRange:r.ref_range||''}));
 }
 
 async function saveMaster(){
-  const {data:existing} = await sb.from('master_data').select('id').eq('user_id',currentUser.id).single();
-  if(existing){
-    await sb.from('master_data').update({data:cache.master,updated_at:new Date().toISOString()}).eq('user_id',currentUser.id);
-  } else {
-    await sb.from('master_data').insert({user_id:currentUser.id,data:cache.master});
-  }
-}
-
-async function loadExerciseLogs(){
-  const {data,error} = await sb.from('exercise_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false});
-  cache.exerciseLogs = (data||[]).map(r=>({id:r.id,date:r.date,exercise:r.exercise,unit:r.unit,quantity:r.quantity}));
-}
-
-async function loadSugarLogs(){
-  const {data} = await sb.from('sugar_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false});
-  cache.sugarLogs = (data||[]).map(r=>({id:r.id,date:r.date,morningTea:r.morning_tea,eveningTea:r.evening_tea,extraSugar:r.extra_sugar,remarks:r.remarks||''}));
-}
-
-async function loadWeightLogs(){
-  const {data} = await sb.from('weight_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false});
-  cache.weightLogs = (data||[]).map(r=>({id:r.id,date:r.date,weight:r.weight}));
-}
-
-async function loadMedicalLogs(){
-  const {data} = await sb.from('medical_logs').select('*').eq('user_id',currentUser.id).order('date',{ascending:false});
-  cache.medicalLogs = (data||[]).map(r=>({id:r.id,date:r.date,test:r.test,result:r.result,unit:r.unit||'',refRange:r.ref_range||''}));
+  try {
+    const {data:existing} = await sb.from('master_data').select('id').eq('user_id',currentUser.id).single();
+    if(existing){ await sb.from('master_data').update({data:cache.master,updated_at:new Date().toISOString()}).eq('user_id',currentUser.id); }
+    else { await sb.from('master_data').insert({user_id:currentUser.id,data:cache.master}); }
+  } catch(e) { showToast('Error saving master data',true); }
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
