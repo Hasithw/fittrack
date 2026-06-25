@@ -333,11 +333,7 @@ async function doForgot(){
 
 async function doSignout(){
   destroyCharts();
-  appInitialised = false;
-  try { await sb.auth.signOut(); } catch(e) {}
-  cache = { master:null, exerciseLogs:[], sugarLogs:[], weightLogs:[], medicalLogs:[] };
-  currentUser = null;
-  showAuth();
+  await sb.auth.signOut();
 }
 
 function showAuth(){
@@ -357,26 +353,31 @@ async function showApp(user){
   render();
 }
 
-// Auth startup - single initialisation guard
-let appInitialised = false;
+// Auth startup — getSession first, onAuthStateChange only for login/logout events
+(async () => {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      await showApp(session.user);
+    } else {
+      showAuth();
+    }
+  } catch(e) {
+    showAuth();
+  }
+})();
 
-sb.auth.onAuthStateChange(async (event, session) => {
-  if(event === 'PASSWORD_RECOVERY') return;
-  if(event === 'SIGNED_OUT'){
-    appInitialised = false;
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && !currentUser) {
+    showApp(session.user);
+  }
+  if (event === 'SIGNED_OUT') {
+    destroyCharts();
     cache = { master:null, exerciseLogs:[], sugarLogs:[], weightLogs:[], medicalLogs:[] };
     currentUser = null;
-    showAuth(); return;
-  }
-  if(session?.user && !appInitialised){
-    appInitialised = true;
-    await showApp(session.user);
+    showAuth();
   }
 });
-
-sb.auth.getSession().then(async ({data:{session}}) => {
-  if(!session?.user && !appInitialised){ showAuth(); }
-}).catch(()=>{ if(!appInitialised) showAuth(); });
 
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 async function loadAllData(){
