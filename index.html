@@ -333,6 +333,7 @@ async function doForgot(){
 
 async function doSignout(){
   destroyCharts();
+  appInitialised = false;
   try { await sb.auth.signOut(); } catch(e) {}
   cache = { master:null, exerciseLogs:[], sugarLogs:[], weightLogs:[], medicalLogs:[] };
   currentUser = null;
@@ -356,25 +357,26 @@ async function showApp(user){
   render();
 }
 
-// Single auth entry point - onAuthStateChange handles everything
+// Auth startup - single initialisation guard
+let appInitialised = false;
+
 sb.auth.onAuthStateChange(async (event, session) => {
   if(event === 'PASSWORD_RECOVERY') return;
-  if(session?.user){
-    if(!currentUser || currentUser.id !== session.user.id){
-      await showApp(session.user);
-    }
-  } else {
-    showAuth();
+  if(event === 'SIGNED_OUT'){
+    appInitialised = false;
+    cache = { master:null, exerciseLogs:[], sugarLogs:[], weightLogs:[], medicalLogs:[] };
+    currentUser = null;
+    showAuth(); return;
+  }
+  if(session?.user && !appInitialised){
+    appInitialised = true;
+    await showApp(session.user);
   }
 });
 
-// Trigger initial session check
-sb.auth.getSession().then(({data:{session}, error}) => {
-  if(error || !session?.user){
-    showAuth();
-  }
-  // If session exists, onAuthStateChange above will handle it
-});
+sb.auth.getSession().then(async ({data:{session}}) => {
+  if(!session?.user && !appInitialised){ showAuth(); }
+}).catch(()=>{ if(!appInitialised) showAuth(); });
 
 // ── DATA LAYER ────────────────────────────────────────────────────────────────
 async function loadAllData(){
